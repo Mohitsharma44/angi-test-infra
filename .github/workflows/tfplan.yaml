@@ -3,6 +3,7 @@ name: Terraform plan Dev env
 on:
   push:
     branches: [main]
+  
 
 jobs:
   fmt-check:
@@ -44,9 +45,30 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-west-2
     
+    # There's got to be a better way!
+    - name: Add profile credentials to ~/.aws/credentials 
+      run: |
+        aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }} --profile angi-dev
+        aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }} --profile angi-dev
+        mkdir -p .aws
+        echo "[angi-dev]" > .aws/credentials
+        echo "aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .aws/credentials
+        echo "aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .aws/credentials
+    
+    - name: Install K8s dependencies
+      run: |
+        sudo curl -o /usr/local/bin/kubectl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        sudo chmod +x /usr/local/bin/kubectl
+        curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+        sudo apt-get install apt-transport-https unzip -y
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+        sudo apt-get update
+        sudo apt-get install -y helm
+
     - name: terraform plan
       uses: dflook/terraform-plan@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        AWS_SHARED_CREDENTIALS_FILE: /github/workspace/.aws/credentials
       with:
         path: dev
