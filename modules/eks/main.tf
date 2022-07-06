@@ -15,8 +15,6 @@ module "eks_blueprints" {
 
   cluster_kms_key_additional_admin_arns = [data.aws_caller_identity.current.arn]
 
-  ## Cannot run daemonsets (so no custom IngressControllers or observability tools like promethues unless we run them as sidecar)
-
   node_security_group_additional_rules = {
     # Extend node-to-node security group rules. Recommended and required for the Add-ons
     ingress_self_all = {
