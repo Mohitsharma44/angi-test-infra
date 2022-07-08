@@ -94,7 +94,9 @@ data "aws_iam_policy_document" "allow_ecr_push" {
       "iam:GetOpenIDConnectProvider",
       "eks:DescribeAddon",
       "iam:GetInstanceProfile",
-      "eks:DescribeNodegroup"
+      "eks:DescribeNodegroup",
+      "eks:ListClusters"
+
     ]
     resources = ["*"]
   }
