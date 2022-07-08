@@ -1,50 +1,40 @@
 name: Terraform plan Dev env
 
 on:
-  push:
-    branches: [main]
-  
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+defaults:
+  run:
+    working-directory: ${{ env.tf_actions_working_dir }}
 
 jobs:
   fmt-check:
     name: Check terraform formatting issues
     runs-on: ubuntu-latest
     steps:
-    - name: Check out code
-      uses: actions/checkout@v2
-
-    - name: terraform fmt -check -recursive .
-      uses: dflook/terraform-fmt-check@v1
-      with:
-        path: dev
+    - uses: hashicorp/setup-terraform@v2
+    
+    - name: Terraform fmt
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: true
 
   validate:
+    name: Check terraform formatting issues
     runs-on: ubuntu-latest
-    name: Validate terraform configuration
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
+    - uses: hashicorp/setup-terraform@v2
 
-      - name: terraform validate
-        uses: dflook/terraform-validate@v1
-        with:
-          path: dev
+    - name: Terraform validate
+      id: validate
+      run: terraform fmt -check
+      continue-on-error: true
 
-  plan:
-    name: Terraform plan
+  pre-plan:
+    name: Setup aws creds and install K8s dependencies
     runs-on: ubuntu-latest
-
     steps:
-    - name: Check out code
-      uses: actions/checkout@v2
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-west-2
-    
     # There's got to be a better way!
     - name: Add profile credentials to ~/.aws/credentials 
       run: |
@@ -65,10 +55,152 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y helm
 
-    - name: terraform plan
-      uses: dflook/terraform-plan@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        AWS_SHARED_CREDENTIALS_FILE: /github/workspace/.aws/credentials
+  plan:
+    name: Check terraform formatting issues
+    runs-on: ubuntu-latest
+    steps:
+    - uses: hashicorp/setup-terraform@v2
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
       with:
-        path: dev
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+
+    - name: Terraform plan
+      id: validate
+      run: terraform plan -no-color
+      continue-on-error: true        
+
+  post-plans:
+    name: post plan as a comment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add or Update comment
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        env:
+          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // 1. Retrieve existing bot comments for the PR
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            })
+            const botComment = comments.find(comment => {
+              return comment.user.type === 'Bot' && comment.body.includes('Terraform Format and Style')
+            })
+
+            // 2. Prepare format of the comment
+            const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+            #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+            <details><summary>Validation Output</summary>
+
+            \`\`\`\n
+            ${{ steps.validate.outputs.stdout }}
+            \`\`\`
+
+            </details>
+
+            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+            
+            <details><summary>Show Plan</summary>
+            
+            \`\`\`\n
+            ${process.env.PLAN}
+            \`\`\`
+            
+            </details>
+            
+            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Working Directory: \`${{ env.tf_actions_working_dir }}\`, Workflow: \`${{ github.workflow }}\`*`;
+            
+            // 3. If we have a comment, update it, otherwise create a new one
+            if (botComment) {
+              github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: output
+              })
+            } else {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              })
+            }
+
+
+# jobs:
+#   fmt-check:
+#     name: Check terraform formatting issues
+#     runs-on: ubuntu-latest
+#     steps:
+#     - name: Check out code
+#       uses: actions/checkout@v2
+
+#     - name: terraform fmt -check -recursive .
+#       uses: dflook/terraform-fmt-check@v1
+#       with:
+#         path: dev
+
+#   validate:
+#     runs-on: ubuntu-latest
+#     name: Validate terraform configuration
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v2
+
+#       - name: terraform validate
+#         uses: dflook/terraform-validate@v1
+#         with:
+#           path: dev
+
+#   plan:
+#     name: Terraform plan
+#     runs-on: ubuntu-latest
+
+#     steps:
+#     - name: Check out code
+#       uses: actions/checkout@v2
+    
+#     - name: Configure AWS credentials
+#       uses: aws-actions/configure-aws-credentials@v1
+#       with:
+#         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#         aws-region: us-west-2
+    
+#     # There's got to be a better way!
+#     - name: Add profile credentials to ~/.aws/credentials 
+#       run: |
+#         aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }} --profile angi-dev
+#         aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }} --profile angi-dev
+#         mkdir -p .aws
+#         echo "[angi-dev]" > .aws/credentials
+#         echo "aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID }}" >> .aws/credentials
+#         echo "aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> .aws/credentials
+    
+#     - name: Install K8s dependencies
+#       run: |
+#         sudo curl -o /usr/local/bin/kubectl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+#         sudo chmod +x /usr/local/bin/kubectl
+#         curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+#         sudo apt-get install apt-transport-https unzip -y
+#         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+#         sudo apt-get update
+#         sudo apt-get install -y helm
+
+#     - name: terraform plan
+#       uses: dflook/terraform-plan@v1
+#       env:
+#         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#         AWS_SHARED_CREDENTIALS_FILE: /github/workspace/.aws/credentials
+#       with:
+#         path: dev
