@@ -23,7 +23,7 @@ resource "aws_iam_group_membership" "main" {
   group = aws_iam_group.cigroup.name
 }
 
-data "aws_iam_policy_document" "allow_ecr_push" {
+data "aws_iam_policy_document" "for_ci_user" {
   statement {
     actions = [
       "ecr:GetAuthorizationToken",
@@ -52,62 +52,20 @@ data "aws_iam_policy_document" "allow_ecr_push" {
     ]
   }
 
-  # Special statement to allow github user be able to run terraform plans
-  # generated using iamlive and running terraform plan
   statement {
-    actions = [
-      "s3:ListBucket",
-      "s3:GetObject",
-      "ec2:DescribeAccountAttributes",
-      "ec2:DescribeAvailabilityZones",
-      "ecr:DescribeRepositories",
-      "ec2:DescribeVpcs",
-      "ecr:ListTagsForResource",
-      "ec2:DescribeVpcClassicLink",
-      "ecr:GetLifecyclePolicy",
-      "ec2:DescribeVpcClassicLinkDnsSupport",
-      "ec2:DescribeVpcAttribute",
-      "iam:GetGroup",
-      "iam:GetUser",
-      "ec2:DescribeNetworkAcls",
-      "ecr:GetRepositoryPolicy",
-      "ec2:DescribeAddresses",
-      "ec2:DescribeRouteTables",
-      "ec2:DescribeSecurityGroups",
-      "iam:GetPolicy",
-      "kms:DescribeKey",
-      "iam:GetRole",
-      "kms:GetKeyPolicy",
-      "kms:GetKeyRotationStatus",
-      "iam:GetPolicyVersion",
-      "ec2:DescribeSubnets",
-      "kms:ListResourceTags",
-      "ec2:DescribeInternetGateways",
-      "kms:ListAliases",
-      "iam:ListAttachedGroupPolicies",
-      "ec2:DescribeNatGateways",
-      "iam:ListRolePolicies",
-      "iam:ListAttachedRolePolicies",
-      "eks:DescribeCluster",
-      "ec2:DescribeTags",
-      "eks:DescribeAddonVersions",
-      "iam:GetOpenIDConnectProvider",
-      "eks:DescribeAddon",
-      "iam:GetInstanceProfile",
-      "eks:DescribeNodegroup"
-    ]
+    actions   = ["sts:AssumeRole"]
     resources = ["*"]
   }
 }
 
-resource "aws_iam_policy" "allow_ecr_push" {
+resource "aws_iam_policy" "for_ci_user" {
   name        = "${lower(var.ci_name)}-ecr-${var.ecr_repo}-policy"
   description = "Allow ${var.ci_name} to push new ${var.ecr_repo} ECR images"
   path        = "/"
-  policy      = data.aws_iam_policy_document.allow_ecr_push.json
+  policy      = data.aws_iam_policy_document.for_ci_user.json
 }
 
 resource "aws_iam_group_policy_attachment" "main" {
   group      = aws_iam_group.cigroup.name
-  policy_arn = aws_iam_policy.allow_ecr_push.arn
+  policy_arn = aws_iam_policy.for_ci_user.arn
 }

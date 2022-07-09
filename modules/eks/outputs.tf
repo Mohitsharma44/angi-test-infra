@@ -20,10 +20,10 @@ output "configure_kubectl" {
 
 output "kubernetes_version" {
   description = "Kubernetes version running in cluster"
-  value = module.eks_blueprints.eks_cluster_version
+  value       = module.eks_blueprints.eks_cluster_version
 }
 
 output "oidc_provider" {
   description = "OIDC provider for the EKS cluster"
-  value = module.eks_blueprints.oidc_provider
+  value       = module.eks_blueprints.oidc_provider
 }

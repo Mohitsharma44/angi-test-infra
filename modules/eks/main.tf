@@ -1,5 +1,7 @@
 locals {
-  additional_iam_policies_for_nodegroups = length(var.additional_iam_policies_for_nodegroups) > 0 ? var.additional_iam_policies_for_nodegroups: []
+  additional_iam_policies_for_nodegroups = length(var.additional_iam_policies_for_nodegroups) > 0 ? var.additional_iam_policies_for_nodegroups : []
+  map_users                              = length(var.list_of_maps_of_authenticated_users) > 0 ? var.list_of_maps_of_authenticated_users : []
+  map_roles                              = length(var.list_of_maps_of_authenticated_roles) > 0 ? var.list_of_maps_of_authenticated_roles : []
 }
 
 data "aws_caller_identity" "current" {}
@@ -7,13 +9,16 @@ data "aws_caller_identity" "current" {}
 module "eks_blueprints" {
   source = "github.com/aws-ia/terraform-aws-eks-blueprints?ref=v4.3.0"
 
-  cluster_name = var.cluster_name
+  cluster_name    = var.cluster_name
   cluster_version = var.kubernetes_version
 
-  vpc_id = var.vpc_id
+  vpc_id             = var.vpc_id
   private_subnet_ids = var.private_subnet_ids
 
   cluster_kms_key_additional_admin_arns = [data.aws_caller_identity.current.arn]
+
+  map_users = local.map_users
+  map_roles = local.map_roles
 
   node_security_group_additional_rules = {
     # Extend node-to-node security group rules. Recommended and required for the Add-ons
@@ -56,14 +61,14 @@ module "eks_blueprints" {
       enable_monitoring = true
       eni_delete        = true
 
-      subnet_type     = "private"
-      subnet_ids      = var.private_subnet_ids
+      subnet_type = "private"
+      subnet_ids  = var.private_subnet_ids
 
       desired_size = 3
       max_size     = 10
       min_size     = 2
 
-      disk_size       = 100 
+      disk_size = 100
       update_config = [{
         max_unavailable_percentage = 30
       }]
@@ -75,21 +80,21 @@ module "eks_blueprints" {
         "k8s.io/cluster-autoscaler/node-template/label/eks/node_group_name"            = "spot-2vcpu-8mem"
       }
     }
-  spot_4vcpu_16mem = {
-    node_group_name   = "managed-spot-4vcpu-16mem"
+    spot_4vcpu_16mem = {
+      node_group_name   = "managed-spot-4vcpu-16mem"
       capacity_type     = "SPOT"
       instance_types    = ["m5.xlarge", "m4.xlarge", "m6a.xlarge", "m5a.xlarge", "m5d.xlarge"]
       enable_monitoring = true
       eni_delete        = true
 
-      subnet_type     = "private"
-      subnet_ids      = var.private_subnet_ids
+      subnet_type = "private"
+      subnet_ids  = var.private_subnet_ids
 
       desired_size = 3
       max_size     = 10
       min_size     = 2
 
-      disk_size       = 100 
+      disk_size = 100
       update_config = [{
         max_unavailable_percentage = 30
       }]

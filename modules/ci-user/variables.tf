@@ -15,7 +15,7 @@ variable "ci_project" {
 }
 
 variable "common_tags" {
-  type = map(string)
+  type        = map(string)
   description = "Common tags to be applied to CI user"
-  default = {}
+  default     = {}
 }
