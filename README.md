@@ -27,7 +27,7 @@ Inside the cluster, we Deploy the following services:
   - App of Apps from [angi-test-charts](https://github.com/Mohitsharma44/angi-test-charts) with horizontal pod autoscaling
 
 ToDo: 
-- Fix the github actions. Its currently failing when terraform tries to make aws calls (in providers.tf for kubernetes and helm)
+- [x] Fix the github actions. Its currently failing when terraform tries to make aws calls (in providers.tf for kubernetes and helm)
 
 > Currently we have a single state file standing up all the resources required for setting up an EKS cluster and running a whole bunch of applications in it.
 > Given that we now have over 120 resources being managed in a single statefile, we should break it down into simpler, logical state files for easier and quicker operations
