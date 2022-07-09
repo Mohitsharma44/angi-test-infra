@@ -1,5 +1,89 @@
 data "aws_caller_identity" "current" {}
 
+data "aws_iam_policy_document" "assume_role_policy" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:PrincipalTag/eks_cluster"
+      values   = ["${var.name_prefix}-eks"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "allow_tf_plans" {
+  # Special statement to allow github user be able to run terraform plans
+  # generated using iamlive and running terraform plan
+  statement {
+    actions = [
+      "ec2:DescribeAccountAttributes",
+      "ec2:DescribeAddresses",
+      "ec2:DescribeAvailabilityZones",
+      "ec2:DescribeInternetGateways",
+      "ec2:DescribeNatGateways",
+      "ec2:DescribeNetworkAcls",
+      "ec2:DescribeRouteTables",
+      "ec2:DescribeSecurityGroups",
+      "ec2:DescribeSubnets",
+      "ec2:DescribeTags",
+      "ec2:DescribeVpcAttribute",
+      "ec2:DescribeVpcClassicLink",
+      "ec2:DescribeVpcClassicLinkDnsSupport",
+      "ec2:DescribeVpcs",
+      "ecr:DescribeRepositories",
+      "ecr:GetLifecyclePolicy",
+      "ecr:GetRepositoryPolicy",
+      "ecr:ListTagsForResource",
+      "eks:DescribeAddon",
+      "eks:DescribeAddonVersions",
+      "eks:DescribeCluster",
+      "eks:DescribeNodegroup",
+      "eks:ListClusters",
+      "iam:GetGroup",
+      "iam:GetInstanceProfile",
+      "iam:GetOpenIDConnectProvider",
+      "iam:GetPolicy",
+      "iam:GetPolicyVersion",
+      "iam:GetRole",
+      "iam:GetUser",
+      "iam:ListAttachedGroupPolicies",
+      "iam:ListAttachedRolePolicies",
+      "iam:ListRolePolicies",
+      "kms:DescribeKey",
+      "kms:GetKeyPolicy",
+      "kms:GetKeyRotationStatus",
+      "kms:ListAliases",
+      "kms:ListResourceTags",
+      "s3:GetObject",
+      "s3:ListBucket"
+    ]
+
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "allow_tf_plans" {
+  name   = "allow_tf_plans"
+  policy = data.aws_iam_policy_document.allow_tf_plans.json
+
+}
+
+resource "aws_iam_role" "to_access_eks_cluster" {
+  name               = "access_${var.name_prefix}-eks_cluster"
+  assume_role_policy = data.aws_iam_policy_document.assume_role_policy.json
+}
+
+resource "aws_iam_role_policy_attachment" "allow_tf_plans" {
+  role       = aws_iam_role.to_access_eks_cluster.name
+  policy_arn = aws_iam_policy.allow_tf_plans.arn
+}
+
 locals {
   common_tags = {
     "eks_cluster" = "${var.name_prefix}-eks"
@@ -35,7 +119,7 @@ module "ecr" {
           tagStatus     = "tagged",
           tagPrefixList = ["v"],
           countType     = "imageCountMoreThan",
-          countNumber   = 30
+          countNumber   = 10
         },
         action = {
           type = "expire"
@@ -86,6 +170,20 @@ module "eks_cluster" {
   private_subnet_ids                     = module.network.private_subnet_ids
   additional_iam_policies_for_nodegroups = [aws_iam_policy.eks_cluster_node_inline_addon_policy.arn]
   eks_tags                               = local.common_tags
+  # list_of_maps_of_authenticated_users = [
+  #   {
+  #     userarn : module.ci_user.user_arn,
+  #     username : module.ci_user.user_name,
+  #     groups : ["system:masters"]
+  #   }
+  # ]
+  list_of_maps_of_authenticated_roles = [
+    {
+      rolearn : aws_iam_role.to_access_eks_cluster.arn
+      username : aws_iam_role.to_access_eks_cluster.name
+      groups : ["system:masters"]
+    }
+  ]
 }
 
 module "dev_eks_blueprints_kubernetes_addons" {
