@@ -39,6 +39,6 @@ module "vpc" {
     "kubernetes.io/role/elb" = "1"
   })
   private_subnet_tags = merge(local.common_vpc_tags, {
-    "kubernetes.io/role/elb" = "1"
+    "kubernetes.io/role/internal-elb" = "1"
   })
 }
